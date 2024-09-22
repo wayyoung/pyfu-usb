@@ -197,6 +197,20 @@ def list_devices(vid: Optional[int] = None, pid: Optional[int] = None) -> None:
             )
         )
 
+        if device.idVendor == 0x19f5:
+            if device.idProduct == 0x4537:
+                logger.info(f'N32G4FR!!')
+                # for cfg in device:
+                #     for intf in cfg:
+                #         print(f'INTF:{intf.bInterfaceNumber}')
+                      
+                dfu.download2(device, 0x00, 0x00, bytes([0x10, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00]))
+                
+               
+            else:
+                logger.warning(f'Unknown N32 product: {device.idProduct}')
+            continue 
+
         for cfg in device:
             for intf in cfg:
                 for segment in descriptor.get_memory_layout(

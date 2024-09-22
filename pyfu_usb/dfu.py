@@ -2,7 +2,7 @@
 """Minimal DFU protocol implementation."""
 
 import logging
-from typing import Optional
+from typing import Optional, Any
 
 import usb
 
@@ -60,6 +60,41 @@ def get_state(
     return state
 
 
+
+def get_state2(
+    dev: usb.core.Device, interface: int, timeout_ms: int = _TIMEOUT_MS
+) -> tuple[int, Any]:
+    """Get device state.
+
+    Args:
+        dev: USB device.
+        interface: USB device interface.
+        timeout_ms: Timeout in milliseconds for USB control transfer.
+
+    Returns:
+        Device state code.
+
+    Raises:
+        RuntimeError: Device returned error state.
+    """
+    ret = dev.ctrl_transfer(
+        bmRequestType=_USB_REQUEST_TYPE_RECV,
+        bRequest=_DFU_CMD_GETSTATUS,
+        wValue=0,
+        wIndex=interface,
+        data_or_wLength= 0x800,
+        timeout=timeout_ms,
+    )
+
+    state: int = ret[4]
+
+    if state == _DFU_STATE_DFU_ERROR:
+        raise RuntimeError("Target device error")
+
+    return (state, ret)
+
+
+
 def clear_status(
     dev: usb.core.Device, interface: int, timeout_ms: int = _TIMEOUT_MS
 ) -> None:
@@ -112,6 +147,43 @@ def download(
         _DFU_STATE_DFU_DOWNLOAD_IDLE,
     ]:
         pass
+
+
+def download2(
+    dev: usb.core.Device,
+    interface: int,
+    transaction: int,
+    data: Optional[bytes],
+    timeout_ms: int = _TIMEOUT_MS,
+    resp_windex: int = 0x0010,
+) -> None:
+    """Download data.
+
+    Args:
+        dev: USB device.
+        interface: USB device interface.
+        transaction: Transaction counter.
+        data: Data to download or None to indicate end of download.
+        timeout_ms: Timeout in milliseconds for USB control transfer.
+    """
+    # Send data
+    dev.ctrl_transfer(
+        bmRequestType=_USB_REQUEST_TYPE_SEND,
+        bRequest=_DFU_CMD_DOWNLOAD,
+        wValue=transaction,
+        wIndex=interface,
+        data_or_wLength=data,
+        timeout=timeout_ms,
+    )
+
+    # Wait for download to process
+    while True:
+        (state, ret_data) = get_state2(dev, resp_windex, timeout_ms=timeout_ms)
+        if state not in [_DFU_STATE_DFU_IDLE, _DFU_STATE_DFU_DOWNLOAD_IDLE,]:
+            break
+    
+    print(ret_data)
+
 
 
 def claim_interface(dev: usb.core.Device, interface: int) -> None:
